@@ -33,6 +33,7 @@ use std::{cell::RefCell, env, sync::atomic::*, sync::Arc, thread, time::*};
 
 use anyhow::bail;
 
+use esp_idf_svc::notify::EspNotify;
 use log::*;
 
 use url;
@@ -70,7 +71,7 @@ use esp_idf_svc::wifi::*;
 
 use esp_idf_hal::adc;
 use esp_idf_hal::delay;
-use esp_idf_hal::gpio;
+use esp_idf_hal::gpio::{self, InputPin, PinDriver};
 use esp_idf_hal::i2c;
 use esp_idf_hal::peripheral;
 use esp_idf_hal::prelude::*;
@@ -178,6 +179,35 @@ fn main() -> Result<()> {
             th.join().unwrap();
         }
     }
+
+    println!("Testing gpio...");
+    let _subscription = {
+        let mut driver = PinDriver::input(pins.gpio16)?;
+        let pin_number = driver.pin();
+
+        let config = esp_idf_svc::notify::Configuration::default();
+        let notify = EspNotify::new(&config)?;
+
+        let subscription = notify.subscribe(move |v| {
+            println!("Pin {} changed to {}", pin_number, v);
+        })?;
+
+        driver.set_pull(gpio::Pull::Up)?;
+        driver.set_interrupt_type(gpio::InterruptType::AnyEdge)?;
+        unsafe {
+            driver.subscribe(move || {
+                let value = esp_idf_sys::gpio_get_level(pin_number) as u32;
+                notify.post(&value).unwrap();
+            })?;
+        }
+
+        for i in 0..100 {
+            println!("{i}, gpio16 = {}", driver.is_high());
+            thread::sleep(Duration::from_secs(1));
+        }
+
+        subscription
+    };
 
     #[allow(unused)]
     let sysloop = EspSystemEventLoop::take()?;
