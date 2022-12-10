@@ -180,34 +180,85 @@ fn main() -> Result<()> {
         }
     }
 
-    println!("Testing gpio...");
-    let _subscription = {
-        let mut driver = PinDriver::input(pins.gpio16)?;
-        let pin_number = driver.pin();
+    println!("Testing gpio 16...");
+    let pin = pins.gpio16;
+    std::thread::spawn(move || {
+        let _subscription = {
+            let mut driver = PinDriver::input(pin).unwrap();
+            let pin_number = driver.pin();
 
-        let config = esp_idf_svc::notify::Configuration::default();
-        let notify = EspNotify::new(&config)?;
+            let config = esp_idf_svc::notify::Configuration::default();
+            let notify = EspNotify::new(&config).unwrap();
 
-        let subscription = notify.subscribe(move |v| {
-            println!("Pin {} changed to {}", pin_number, v);
-        })?;
+            let subscription = notify
+                .subscribe(move |v| {
+                    println!("Pin {} changed to {}", pin_number, v);
+                })
+                .unwrap();
 
-        driver.set_pull(gpio::Pull::Up)?;
-        driver.set_interrupt_type(gpio::InterruptType::AnyEdge)?;
-        unsafe {
-            driver.subscribe(move || {
-                let value = esp_idf_sys::gpio_get_level(pin_number) as u32;
-                notify.post(&value).unwrap();
-            })?;
-        }
+            driver.set_pull(gpio::Pull::Up).unwrap();
+            driver
+                .set_interrupt_type(gpio::InterruptType::AnyEdge)
+                .unwrap();
+            println!("calling subscribe {}", pin_number);
+            unsafe {
+                driver
+                    .subscribe(move || {
+                        let value = esp_idf_sys::gpio_get_level(pin_number) as u32;
+                        notify.post(&value).unwrap();
+                    })
+                    .unwrap();
+            }
+            println!("subscribed {}", pin_number);
 
-        for i in 0..100 {
-            println!("{i}, gpio16 = {}", driver.is_high());
-            thread::sleep(Duration::from_secs(1));
-        }
+            for i in 0..100 {
+                println!("{i}, gpio{pin_number} = {}", driver.is_high());
+                thread::sleep(Duration::from_secs(1));
+            }
 
-        subscription
-    };
+            subscription
+        };
+    });
+
+    println!("Testing gpio 17...");
+    let pin = pins.gpio17;
+    std::thread::spawn(move || {
+        let _subscription = {
+            let mut driver = PinDriver::input(pin).unwrap();
+            let pin_number = driver.pin();
+
+            let config = esp_idf_svc::notify::Configuration::default();
+            let notify = EspNotify::new(&config).unwrap();
+
+            let subscription = notify
+                .subscribe(move |v| {
+                    println!("Pin {} changed to {}", pin_number, v);
+                })
+                .unwrap();
+
+            driver.set_pull(gpio::Pull::Up).unwrap();
+            driver
+                .set_interrupt_type(gpio::InterruptType::AnyEdge)
+                .unwrap();
+            println!("calling subscribe {}", pin_number);
+            unsafe {
+                driver
+                    .subscribe(move || {
+                        let value = esp_idf_sys::gpio_get_level(pin_number) as u32;
+                        notify.post(&value).unwrap();
+                    })
+                    .unwrap();
+            }
+            println!("subscribed {}", pin_number);
+
+            for i in 0..100 {
+                println!("{i}, gpio{pin_number} = {}", driver.is_high());
+                thread::sleep(Duration::from_secs(1));
+            }
+
+            subscription
+        };
+    });
 
     #[allow(unused)]
     let sysloop = EspSystemEventLoop::take()?;
